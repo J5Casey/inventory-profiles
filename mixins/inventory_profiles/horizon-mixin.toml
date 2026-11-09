@@ -1,6 +1,6 @@
 [mod]
 id = "inventory_profiles"
-version = "1.0.1"
+version = "1.0.2"
 priority = 100
 
 # Every hook below but `sort_slots` names a native hook point (`hook`,
@@ -9,7 +9,7 @@ priority = 100
 # point and is hooked by its path; the glue also reads the game's own state.
 # `horizon_revision` is the commit this version was built and tested on.
 [compatibility]
-horizon_revision = "36584650eaeec33553d41c4551a5b38b4a6cd0d7"
+horizon_revision = "77181039ec37e384de5d989e62db79ee33311da4"
 
 [[module]]
 id = "runtime"

@@ -1,10 +1,9 @@
 // Glue between Horizon's `Game` and `mod_inventory_profiles` runtime state.
-use crate::game::{Game, Screen};
+use crate::game::{Game, NativeSlotRole, Screen};
 use crate::game::mod_inventory_profiles as m;
 use crate::game::native_hooks::NativeMod;
 use core::ops::ControlFlow;
 use horizon_client::{
-    containers::BlockEntity,
     extras_hud::Corners,
     hud::HudBatch,
     inv_sort,
@@ -183,21 +182,14 @@ fn sort_slots_with_mode(game: &mut Game<'_>, slots: &[usize], sort_mode: u8) {
     }
 }
 
+/// The open menu's storage slots (a chest's, a hopper's, a mod menu's linked
+/// slots), as Horizon says what each slot is for: empty on the inventory
+/// screen, a crafting table or any screen without storage.
 fn open_container_slots(game: &Game<'_>) -> Vec<usize> {
-    if game.screen != Screen::Inventory || game.station.is_some() || game.mount_active() {
-        return Vec::new();
-    }
-    let chest_like = if game.remote.is_some() {
-        game.remote_storage_open()
-    } else {
-        matches!(game.container_kind(), Some(BlockEntity::Chest(_)))
-    };
-    if !chest_like {
-        return Vec::new();
-    }
-    game.slots()
+    game.native_slot_roles()
         .into_iter()
-        .filter(|s| (300..500).contains(s))
+        .filter(|&(_, role)| role == NativeSlotRole::Storage)
+        .map(|(slot, _)| slot)
         .collect()
 }
 
@@ -220,7 +212,7 @@ pub(super) fn on_key(game: &mut Game<'_>, key: &str, pressed: bool) {
     if !s.sort_buttons && key == sort_key {
         let container = open_container_slots(game);
         let hovered = game.inventory_target().0;
-        let target_slots: Vec<usize> = if hovered.is_some_and(|h| (300..500).contains(&h))
+        let target_slots: Vec<usize> = if hovered.is_some_and(|h| container.contains(&h))
             || (hovered.is_none() && !container.is_empty())
         {
             container
@@ -231,7 +223,7 @@ pub(super) fn on_key(game: &mut Game<'_>, key: &str, pressed: bool) {
         return;
     }
 
-    // Quick-Stack matching items from player inventory (9..36) into open container (300..500)
+    // Quick-Stack matching items from player inventory (9..36) into the open menu's storage
     if s.quick_stack && key == quick_key {
         let container = open_container_slots(game);
         if container.is_empty() || game.carried.is_some() {

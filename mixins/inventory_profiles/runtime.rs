@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 pub const ID: &str = "inventory_profiles";
 pub const NAME: &str = "Inventory Profiles";
-pub const VERSION: &str = "1.0.1";
+pub const VERSION: &str = "1.0.2";
 pub const DESCRIPTION: &str = "1:1 Inventory Profiles Next & Inventory Sorter: R-key & UI sorting (Category, A-Z, Count, ID), Auto-Refill depleted stacks, Tool Break Protection, and G-key Quick-Stack to chests.";
 
 pub const KEY_SORT: &str = "sort";
