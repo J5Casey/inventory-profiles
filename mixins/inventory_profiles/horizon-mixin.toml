@@ -9,8 +9,8 @@ priority = 100
 # point and is hooked by its path; the glue also reads the game's own state.
 # `horizon_revision` is the commit this version was built and tested on.
 [compatibility]
-# Pinned to J5Casey braid/dev9 (a3bf653 + arismoko/horizon#2588 + the panel_style Classic PR) until those reach upstream.
-horizon_revision = "2118dcefa1914c516ff3b61831cf17d7719cddce"
+# Pinned to J5Casey braid/dev10 (a3bf653 + arismoko/horizon#2588 + the panel_style Classic PR) until those reach upstream.
+horizon_revision = "ac5ec38edcb2aba90399e8370081f0846b0f99d1"
 
 [[module]]
 id = "runtime"
