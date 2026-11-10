@@ -9,7 +9,8 @@ priority = 100
 # point and is hooked by its path; the glue also reads the game's own state.
 # `horizon_revision` is the commit this version was built and tested on.
 [compatibility]
-horizon_revision = "a3bf6531e07f6292414eda44773d30ab0a47f9db"
+# Pinned to J5Casey braid/template-fishing-rod (a3bf653 + arismoko/horizon#2588) until that fix reaches upstream.
+horizon_revision = "b756be188fbd1d486aa73aaa028b205ffa89d1b8"
 
 [[module]]
 id = "runtime"
