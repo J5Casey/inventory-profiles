@@ -3,5 +3,5 @@
   "horizon_mixins_repository": "https://github.com/horizon-rust/horizon-mixins",
   "horizon_mixins_revision": "5a64af938ec86b00d53d16a408aabc0038fb3e57",
   "horizon_repository": "https://github.com/horizon-rust/horizon",
-  "horizon_revision": "5422feba7b59fe216e344bc594e1e68a99082627"
+  "horizon_revision": "2044c58ee6d268184095d2bf1a0a7f98c63ca3bf"
 }
