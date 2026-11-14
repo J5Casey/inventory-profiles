@@ -1,4 +1,6 @@
 /target
+/engine/target
+.horizon/
 plan.json
 .plan.json*
 *.lock

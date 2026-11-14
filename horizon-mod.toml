@@ -1,8 +1,15 @@
-[mod]
 id = "inventory_profiles"
 name = "Inventory Profiles"
-version = "1.0.2"
-description = "1:1 Java Inventory Profiles Next: One-click & R-key sorting (Category, A-Z, Count, ID), Auto-Refill depleted hand stacks, Tool Break Protection, and Quick-Stack to chests."
+version = "1.1.0"
+description = "Inventory Profiles Next for Horizon: R-key sorting (Category, A-Z, Count, ID), Auto-Refill depleted hand stacks, Tool Break Protection, and G-key Quick-Stack to chests."
 authors = ["CayMac"]
-kind = "native"
-entrypoint = "mixins/inventory_profiles/runtime.rs"
+# A native mod on the mod API only (no [native.*] rows, no game internals).
+api = "0.2"
+side = "client"
+capabilities = ["registries"]
+
+[native]
+game = "26.3"
+# J5Casey/horizon braid/ari-base: arismoko/horizon main d221ff1d6f + #4137 + #4143 (a local developer base).
+horizon = "24715f9161c8e0c4db181f027a1f49de46a32805"
+mixins = "e59da9094f0c2fdda6c627fe9eff22dec6a906f0"

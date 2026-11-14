@@ -1,12 +1,20 @@
+# Inventory Profiles: a native mod on the arismoko/horizon mod API. The
+# launcher compiles this crate against the prebuilt SDK of the commit
+# horizon-mod.toml pins; the SDK dependency must be this exact path. For
+# local checks against a developer base, link a checkout of the pin:
+#   mkdir -p .horizon/sdk && ln -s <checkout> .horizon/sdk/api
+# The engine's tests run without it (engine/).
 [package]
 name = "horizon-mod-inventory-profiles"
-version = "1.0.2"
+version = "1.1.0"
 edition = "2024"
 authors = ["CayMac"]
 license = "MIT"
 publish = false
+autotests = false
 
 [lib]
-path = "mixins/inventory_profiles/runtime.rs"
+path = "src/lib.rs"
 
 [dependencies]
+horizon-mod-api = { path = ".horizon/sdk/api/crates/horizon-mod-api" }

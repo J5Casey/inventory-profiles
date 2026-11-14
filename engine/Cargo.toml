@@ -1,0 +1,13 @@
+# Inventory Profiles' engine (src/engine.rs, no Horizon types) built on its
+# own, so its tests run with plain `cargo test` and no SDK. Not part of the .hmod.
+[package]
+name = "inventory-profiles-engine"
+version = "1.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lib]
+path = "../src/engine.rs"
+
+[workspace]

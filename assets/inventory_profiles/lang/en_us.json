@@ -1,0 +1,18 @@
+{
+  "inventory_profiles.key.sort": "Sort Inventory / Container",
+  "inventory_profiles.key.quick_stack": "Quick-Stack to Container",
+  "inventory_profiles.setting.enabled": "Inventory Profiles",
+  "inventory_profiles.setting.sort_mode": "Sort Order",
+  "inventory_profiles.setting.sort_mode.category": "Category (Creative)",
+  "inventory_profiles.setting.sort_mode.name": "Alphabetical (A-Z)",
+  "inventory_profiles.setting.sort_mode.count": "Stack Count (High-Low)",
+  "inventory_profiles.setting.sort_mode.id": "Item ID",
+  "inventory_profiles.setting.auto_refill": "Auto-Refill Hand Stack",
+  "inventory_profiles.setting.tool_protection": "Tool Break Protection",
+  "inventory_profiles.setting.tool_protection.off": "Off",
+  "inventory_profiles.setting.tool_protection.two": "<= 2 Durability",
+  "inventory_profiles.setting.tool_protection.five": "<= 5 Durability",
+  "inventory_profiles.setting.tool_protection.ten": "<= 10 Durability",
+  "inventory_profiles.setting.quick_stack": "Quick-Stack to Chest (G)",
+  "inventory_profiles.setting.notifications": "HUD Action Notifications"
+}
