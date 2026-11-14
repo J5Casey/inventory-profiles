@@ -3,7 +3,7 @@
 //! (`horizon-mod-api`, lib `mod_api`). The decisions are in `engine.rs`;
 //! this file reads the player's menu and clicks it as a hand would
 //! (`MenuRef::click`, ordinary `ContainerClick`s a server accepts).
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 pub mod engine;
 
