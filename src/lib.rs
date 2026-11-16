@@ -27,8 +27,8 @@ struct Open {
     /// The container's storage (a chest's, a hopper's, a crafting station's
     /// linked chests): quick-stack's target.
     storage: Vec<usize>,
-    /// Whether that storage sorts: not a furnace's or a brewing stand's
-    /// slots, which take their items by kind.
+    /// Whether that storage sorts: not a furnace's, a brewing stand's or a
+    /// content mod machine's slots, which take their items by kind.
     sorts: bool,
     main: Vec<usize>,
 }
@@ -72,8 +72,15 @@ fn settings(host: &dyn ClientHost) -> Settings {
 /// (menu order), from what the game says each slot is for
 /// (`MenuRef::slot_kinds`: a content mod's menu type too), and whether the
 /// storage sorts. `menu` is the menu's type (None: the player's inventory).
+///
+/// A content mod's menu calls every slot that isn't a result or a crafting
+/// grid storage, so a machine's few input slots (Machina's Ember Engine:
+/// fuel and coolant) read as storage too. Those don't sort and get no button
+/// (it would sit on the machine's gauges): a content mod's menu with fewer
+/// than `MACHINE_SLOTS` storage slots is taken for a machine. A hopper, the
+/// smallest storage of the game's own, has 5.
 fn layout(menu: Option<&str>, kinds: &[MenuSlotKind]) -> (Vec<usize>, bool, Vec<usize>) {
-    let storage = (0..kinds.len())
+    let storage: Vec<usize> = (0..kinds.len())
         .filter(|&i| kinds[i] == MenuSlotKind::Storage)
         .collect();
     let main = (0..kinds.len())
@@ -88,8 +95,14 @@ fn layout(menu: Option<&str>, kinds: &[MenuSlotKind]) -> (Vec<usize>, bool, Vec<
                 | "minecraft:brewing_stand"
         )
     );
-    (storage, !machine, main)
+    let content_machine = menu.is_some_and(|m| {
+        !m.starts_with("minecraft:") && !m.starts_with("sunrise:") && storage.len() < MACHINE_SLOTS
+    });
+    (storage, !(machine || content_machine), main)
 }
+
+/// Fewer storage slots than this in a content mod's menu: a machine (`layout`).
+const MACHINE_SLOTS: usize = 5;
 
 /// Where a group of slots' sort button goes: above its top row's last
 /// slot, as Sunrise's own sorting extra puts it (by a chest's title, by the
@@ -636,6 +649,23 @@ mod tests {
         assert!(storage.is_empty());
         assert_eq!(main, (9..36).collect::<Vec<_>>());
         assert!(layout(Some("minecraft:anvil"), &[Other; 39]).0.is_empty());
+        // A content mod's machine: Machina's Ember Engine (fuel, coolant) and
+        // Essence Press (two inputs, a result) quick-stack but don't sort.
+        let mut engine = vec![Storage, Storage];
+        engine.extend(player());
+        let (storage, sorts, _) = layout(Some("machina:ember_engine"), &engine);
+        assert_eq!(storage, [0, 1]);
+        assert!(!sorts);
+        let mut press = vec![Storage, Storage, Result];
+        press.extend(player());
+        assert!(!layout(Some("machina:essence_press"), &press).1);
+        // A hopper's 5 and a llama's 3-slot chest still sort.
+        let mut hopper = vec![Storage; 5];
+        hopper.extend(player());
+        assert!(layout(Some("minecraft:hopper"), &hopper).1);
+        let mut llama = vec![Other, Other, Storage, Storage, Storage];
+        llama.extend(player());
+        assert!(layout(Some("sunrise:mount2"), &llama).1);
     }
 
     #[test]
