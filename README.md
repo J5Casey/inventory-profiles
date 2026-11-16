@@ -27,7 +27,7 @@ menu click (`MenuRef::click`), so servers accept it.
 
 ## On arismoko's mod API
 
-API-only (no game internals), pinned in `horizon-mod.toml` to J5Casey/horizon `braid/ari-base` `86c2820370` (the base every Braid mod pins). Hooks:
+API-only (no game internals), pinned in `sunrise-mod.toml` to J5Casey/horizon `braid/ari-base` `86c2820370` (the base every Braid mod pins). Hooks:
 `render_frame_pre` (auto-refill and tool protection while playing), `input_key` (the keys; `screen_char_typed_pre`
 tells typing into the recipe book's search apart), `screen_render_post` (which menu is open), `render_gui_post` (the
 notice above the hotbar).
@@ -42,7 +42,7 @@ gives a client no read of what a mod menu's slots are for. The sort plan is Hori
 
 ```sh
 (cd engine && cargo test && cargo clippy --all-targets -- -D warnings)
-# against a local checkout of the pinned base: mkdir -p .horizon/sdk && ln -s <checkout> .horizon/sdk/api
+# against a local checkout of the pinned base: mkdir -p .sunrise/sdk && ln -s <checkout> .sunrise/sdk/api
 cargo test && cargo clippy --all-targets -- -D warnings && cargo fmt --check
 ```
 

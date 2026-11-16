@@ -1,6 +1,6 @@
 //! Inventory Profiles for Horizon: sorting, auto-refill, tool break
 //! protection and quick-stack, as a native mod on the mod API
-//! (`horizon-mod-api`, lib `mod_api`). The decisions are in `engine.rs`;
+//! (`sunrise-mod-api`, lib `mod_api`). The decisions are in `engine.rs`;
 //! this file reads the player's menu and clicks it as a hand would
 //! (`MenuRef::click`, ordinary `ContainerClick`s a server accepts).
 #![deny(unsafe_code)]
@@ -70,7 +70,7 @@ fn storage(menu: Option<&str>, slots: usize) -> Vec<usize> {
         {
             (0..own).collect()
         }
-        Some(m) if m.starts_with("horizon:mount") && own > 2 => (2..own).collect(),
+        Some(m) if m.starts_with("sunrise:mount") && own > 2 => (2..own).collect(),
         _ => Vec::new(),
     }
 }
@@ -343,7 +343,7 @@ fn key_name(host: &dyn ClientHost, id: &str, default: &str) -> String {
         .map_or_else(|| default.to_owned(), |(key, _)| key)
 }
 
-#[mod_api::horizon_mod]
+#[mod_api::sunrise_mod]
 impl Hooks for InventoryProfiles {
     fn register(&self, r: &mut dyn Registrar, _cx: &RegistrationContext) {
         for (id, key) in [

@@ -1,6 +1,6 @@
 /target
 /engine/target
-.horizon/
+.sunrise/
 plan.json
 .plan.json*
 *.lock
