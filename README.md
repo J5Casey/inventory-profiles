@@ -5,11 +5,13 @@ A native **Inventory Profiles Next (IPN) / Inventory Sorter** mod for [Horizon](
 
 ## Features
 
-- **Sorting (`R`):**
+- **Sorting (`R` and the sort buttons):**
   - Merges partial stacks and sorts the container under the cursor (`Chests`, `Barrels`, `Shulker Boxes`, `Ender
     Chests`, hoppers, dispensers, a mount's chest) or your main inventory (`9..36`), on every menu screen (crafting
     tables and workstations included: there it sorts your inventory).
-  - **4 Sort Modes:** Category (the item registry's order: a mod can't read the creative tabs'), Alphabetical
+  - **Sort buttons:** a small button above a container's storage (by its title) and one above your inventory
+    (by the "Inventory" label) sort that part; turn them off with "UI Sort Buttons".
+  - **4 Sort Modes:** Category (the creative tabs' order, as Inventory Profiles Next sorts), Alphabetical
     (`A-Z`), Item Count (`High to Low`), or Item ID.
 - **Auto-Refill Hand Stacks:**
   - Replaces depleted blocks, food, torches, or projectiles in your main hand with a matching stack from your
@@ -25,18 +27,20 @@ A native **Inventory Profiles Next (IPN) / Inventory Sorter** mod for [Horizon](
 Settings are on the mod's page in **Options > Mods**, its keys in **Controls**. Every click it makes is an ordinary
 menu click (`MenuRef::click`), so servers accept it.
 
-## On arismoko's mod API
+## On the Sunrise mod API
 
-API-only (no game internals), pinned in `sunrise-mod.toml` to J5Casey/horizon `braid/ari-base` `86c2820370` (the base every Braid mod pins). Hooks:
-`render_frame_pre` (auto-refill and tool protection while playing), `input_key` (the keys; `screen_char_typed_pre`
-tells typing into the recipe book's search apart), `screen_render_post` (which menu is open), `render_gui_post` (the
-notice above the hotbar).
+API-only (no game internals), pinned in `sunrise-mod.toml` to J5Casey/sunrise `braid/sun-base` (the base every Braid
+mod pins). Hooks: `render_frame_pre` (auto-refill and tool protection while playing), `input_key` (the keys;
+`screen_char_typed_pre` tells typing into the recipe book's search apart), `screen_render_post` (which menu is open,
+and the sort buttons drawn), `mouse_button_pre` (a press on a sort button), `render_gui_post` (the notice above the
+hotbar).
 
-What changed from the injection build: the sort buttons are gone (they were Horizon's sorting extra, hooked through a
-private function); the key sorts. Which slots are a container's storage comes from the menu's type id, so a content
-mod's menu type (a crafting station's linked chests) gets no quick-stack and sorts the inventory only: the mod API
-gives a client no read of what a mod menu's slots are for. The sort plan is Horizon's `inv_sort::plan`, copied into
-`src/engine.rs` (a mod can't call it).
+Which slots are a container's storage comes from the game (`MenuRef::slot_kinds`), so a content mod's menu (a crafting
+station's linked chests) sorts and takes quick-stacks like a chest; a furnace's and a brewing stand's slots take
+quick-stacks but don't sort. The Category order is the creative search tab's (`ClientHost::creative_search_items`,
+sunrise-org/sunrise#1516), ranked as the injection build did: a stack's own place, else its item's first. The buttons
+are the mod's own, drawn where and as Sunrise's sorting extra draws its own. The sort plan is the game's
+`inv_sort::plan`, copied into `src/engine.rs` (a mod can't call it).
 
 ## Development
 

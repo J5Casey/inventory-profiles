@@ -30,6 +30,8 @@ pub struct Settings {
     pub tool_protection: u8,
     pub quick_stack: bool,
     pub notifications: bool,
+    /// The sort buttons by a container's storage and the inventory.
+    pub sort_buttons: bool,
 }
 
 impl Default for Settings {
@@ -41,6 +43,7 @@ impl Default for Settings {
             tool_protection: 1,
             quick_stack: true,
             notifications: true,
+            sort_buttons: true,
         }
     }
 }
@@ -56,9 +59,10 @@ pub enum Setting {
 
 /// The page's settings, in order. Labels are `inventory_profiles.setting.<key>`,
 /// a choice's options `inventory_profiles.setting.<key>.<option>`.
-pub const SETTINGS: [Setting; 6] = [
+pub const SETTINGS: [Setting; 7] = [
     Setting::Toggle("enabled", true),
     Setting::Choice("sort_mode", &["category", "name", "count", "id"], 0),
+    Setting::Toggle("sort_buttons", true),
     Setting::Toggle("auto_refill", true),
     Setting::Choice("tool_protection", &["off", "two", "five", "ten"], 1),
     Setting::Toggle("quick_stack", true),
@@ -81,6 +85,7 @@ impl Settings {
             tool_protection: pick("tool_protection", d.tool_protection),
             quick_stack: toggle("quick_stack").unwrap_or(d.quick_stack),
             notifications: toggle("notifications").unwrap_or(d.notifications),
+            sort_buttons: toggle("sort_buttons").unwrap_or(d.sort_buttons),
         }
     }
 

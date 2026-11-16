@@ -9,12 +9,12 @@ pub mod engine;
 
 use engine::{HandSnapshot, Piece, Setting, Settings, Toast};
 use mod_api::{
-    ClientHost, Hooks, InputKeyEvent, ItemKey, ItemStack, KeyAction, KeyConflictContext,
-    KeyRegistration, MenuClick, MenuRef, MouseButton, Registrar, RegistrationContext,
-    RenderFramePreEvent, RenderGuiPostEvent, ScreenCharTypedPreEvent, ScreenRenderPostEvent,
-    SettingSpec, SwapWith, Tag,
+    ClientHost, DrawContext, Flow, Hooks, InputKeyEvent, ItemKey, ItemStack, KeyAction,
+    KeyConflictContext, KeyRegistration, MenuClick, MenuRef, MenuSlotKind, MouseButton,
+    MouseButtonPreEvent, Registrar, RegistrationContext, RenderFramePreEvent, RenderGuiPostEvent,
+    ScreenCharTypedPreEvent, ScreenRenderPostEvent, SettingSpec, SwapWith, Tag,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::{Mutex, MutexGuard};
 
 use engine::ID;
@@ -24,9 +24,24 @@ use engine::ID;
 #[derive(Clone, Debug)]
 struct Open {
     menu: MenuRef,
+    /// The container's storage (a chest's, a hopper's, a crafting station's
+    /// linked chests): quick-stack's target.
     storage: Vec<usize>,
+    /// Whether that storage sorts: not a furnace's or a brewing stand's
+    /// slots, which take their items by kind.
+    sorts: bool,
     main: Vec<usize>,
 }
+
+impl Open {
+    /// The storage the sort key and the container's button sort.
+    fn sortable(&self) -> &[usize] {
+        if self.sorts { &self.storage } else { &[] }
+    }
+}
+
+/// A sort button's side in GUI pixels (the size of Sunrise's own).
+const BUTTON: f32 = 9.0;
 
 #[derive(Default)]
 struct State {
@@ -36,8 +51,6 @@ struct State {
     /// The last key's character went into a text box (a recipe book's
     /// search): its key is typing, not a command.
     typed_in_field: bool,
-    order: HashMap<ItemKey, usize>,
-    names: HashMap<ItemKey, String>,
 }
 
 #[derive(Default)]
@@ -55,34 +68,59 @@ fn settings(host: &dyn ClientHost) -> Settings {
     Settings::read(|k| host.setting_bool(k), |k| host.setting_choice(k))
 }
 
-/// The storage slots of menu type `menu` (None: the player's inventory)
-/// with `slots` slots: a chest's, barrel's, shulker box's, ender chest's,
-/// hopper's, dispenser's or dropper's, a mount's chest. Empty for any other
-/// menu (the crafting table, workstations, a content mod's menu type).
-fn storage(menu: Option<&str>, slots: usize) -> Vec<usize> {
-    let own = slots.saturating_sub(36);
-    match menu {
-        Some(m)
-            if m.starts_with("minecraft:generic_9x")
-                || m == "minecraft:shulker_box"
-                || m == "minecraft:hopper"
-                || m == "minecraft:generic_3x3" =>
-        {
-            (0..own).collect()
-        }
-        Some(m) if m.starts_with("sunrise:mount") && own > 2 => (2..own).collect(),
-        _ => Vec::new(),
-    }
+/// The open menu's storage slots and the player's main inventory's 27
+/// (menu order), from what the game says each slot is for
+/// (`MenuRef::slot_kinds`: a content mod's menu type too), and whether the
+/// storage sorts. `menu` is the menu's type (None: the player's inventory).
+fn layout(menu: Option<&str>, kinds: &[MenuSlotKind]) -> (Vec<usize>, bool, Vec<usize>) {
+    let storage = (0..kinds.len())
+        .filter(|&i| kinds[i] == MenuSlotKind::Storage)
+        .collect();
+    let main = (0..kinds.len())
+        .filter(|&i| matches!(kinds[i], MenuSlotKind::Player(n) if (9..36).contains(&n)))
+        .collect();
+    let machine = matches!(
+        menu,
+        Some(
+            "minecraft:furnace"
+                | "minecraft:blast_furnace"
+                | "minecraft:smoker"
+                | "minecraft:brewing_stand"
+        )
+    );
+    (storage, !machine, main)
 }
 
-/// The player's main inventory's 27 slots in menu `menu` with `slots`
-/// slots: the inventory screen's 9..36, else the 27 before the hotbar, which
-/// every menu puts last.
-fn main_slots(menu: Option<&str>, slots: usize) -> Vec<usize> {
-    match menu {
-        None => (9..36).collect(),
-        Some(_) if slots >= 36 => (slots - 36..slots - 9).collect(),
-        Some(_) => Vec::new(),
+/// Where a group of slots' sort button goes: above its top row's last
+/// slot, as Sunrise's own sorting extra puts it (by a chest's title, by the
+/// "Inventory" label). None when the screen shows none of the slots.
+fn button_at(boxes: &[Option<[f32; 4]>], slots: &[usize]) -> Option<[f32; 4]> {
+    let shown: Vec<[f32; 4]> = slots
+        .iter()
+        .filter_map(|&i| boxes.get(i).copied().flatten())
+        .collect();
+    let top = shown.iter().map(|b| b[1]).reduce(f32::min)?;
+    let right = shown
+        .iter()
+        .filter(|b| b[1] == top)
+        .map(|b| b[0] + b[2])
+        .reduce(f32::max)?;
+    Some([right - 8.0, top - 13.0, BUTTON, BUTTON])
+}
+
+fn inside(point: [f32; 2], [x, y, w, h]: [f32; 4]) -> bool {
+    point[0] >= x && point[0] < x + w && point[1] >= y && point[1] < y + h
+}
+
+/// A sort button: a bordered square with three bars, lighter under the
+/// pointer (Sunrise's own sorting extra's look).
+fn draw_button(draw: &mut dyn DrawContext, [x, y, w, h]: [f32; 4], hovered: bool) {
+    let dark = 0xFF37_3737;
+    let face = if hovered { 0xFFDC_DCDC } else { 0xFFA0_A0A0 };
+    draw.fill([x, y, w, h], dark);
+    draw.fill([x + 1.0, y + 1.0, w - 2.0, h - 2.0], face);
+    for (i, bar) in [5.0, 4.0, 3.0].into_iter().enumerate() {
+        draw.fill([x + 2.0, y + 2.0 + 2.0 * i as f32, bar, 1.0], dark);
     }
 }
 
@@ -115,32 +153,15 @@ fn max_damage(host: &dyn ClientHost, stack: &ItemStack) -> u32 {
         .unwrap_or(0)
 }
 
-/// The name an item shows (its translation; an anvil name is not read).
-fn name(host: &dyn ClientHost, st: &mut State, item: ItemKey) -> String {
-    st.names
-        .entry(item)
-        .or_insert_with(|| {
-            let id = item.id(host);
-            let (ns, path) = id.split_once(':').unwrap_or(("minecraft", &id));
-            host.translate(&format!("item.{ns}.{path}"))
-                .or_else(|| host.translate(&format!("block.{ns}.{path}")))
-                .unwrap_or_else(|| path.to_owned())
-        })
-        .clone()
-}
-
-/// An item's place in the item registry (the creative tabs' order is not
-/// readable by a mod).
-fn order(host: &dyn ClientHost, st: &mut State, item: ItemKey) -> usize {
-    if st.order.is_empty() {
-        st.order = host
-            .item_keys()
-            .into_iter()
-            .enumerate()
-            .map(|(i, k)| (k, i))
-            .collect();
-    }
-    st.order.get(&item).copied().unwrap_or(usize::MAX)
+/// A stack's place in the creative tabs (`creative`, the search tab's
+/// stacks): the same stack's place, else its item's first; last for an item
+/// the tabs don't show.
+fn creative_order(creative: &[ItemStack], stack: &ItemStack) -> usize {
+    creative
+        .iter()
+        .position(|s| s.is_stackable_with(stack))
+        .or_else(|| creative.iter().position(|s| s.same_item(stack)))
+        .unwrap_or(usize::MAX)
 }
 
 fn slot(host: &dyn ClientHost, menu: MenuRef, index: usize) -> Option<ItemStack> {
@@ -148,6 +169,18 @@ fn slot(host: &dyn ClientHost, menu: MenuRef, index: usize) -> Option<ItemStack>
 }
 
 impl InventoryProfiles {
+    /// The open screen's sort buttons and the slots each sorts: the
+    /// container's (storage that sorts) and the inventory's.
+    fn buttons(&self, host: &dyn ClientHost, open: &Open) -> Vec<([f32; 4], Vec<usize>)> {
+        let Some(boxes) = open.menu.slot_boxes(host) else {
+            return Vec::new();
+        };
+        [open.sortable(), &open.main]
+            .into_iter()
+            .filter_map(|slots| Some((button_at(&boxes, slots)?, slots.to_vec())))
+            .collect()
+    }
+
     /// The open menu screen, while it is the player's current menu.
     fn open(&self, host: &dyn ClientHost) -> Option<Open> {
         let st = self.state();
@@ -161,7 +194,7 @@ impl InventoryProfiles {
         if menu.carried(&*host).flatten().is_some() || slots.is_empty() {
             return;
         }
-        let mut st = self.state();
+        let creative = host.creative_search_items();
         let mut kinds: Vec<ItemStack> = Vec::new();
         let pieces: Vec<Option<Piece>> = slots
             .iter()
@@ -184,11 +217,10 @@ impl InventoryProfiles {
         let info: Vec<(usize, String, String)> = kinds
             .iter()
             .map(|k| {
-                let item = k.item();
                 (
-                    order(&*host, &mut st, item),
-                    name(&*host, &mut st, item),
-                    item.id(&*host),
+                    creative_order(&creative, k),
+                    host.hover_name(k),
+                    k.item().id(&*host),
                 )
             })
             .collect();
@@ -208,7 +240,7 @@ impl InventoryProfiles {
             }
         }
         if changed {
-            st.toast.push(
+            self.state().toast.push(
                 s,
                 format!(
                     "[Inventory Profiles] Sorted ({})",
@@ -253,9 +285,8 @@ impl InventoryProfiles {
                     with: SwapWith::Hotbar(sel as u8),
                 };
                 if menu.click(host, &[swap]) {
-                    let mut st = self.state();
-                    let item_name = name(&*host, &mut st, stack.item());
-                    st.toast.push(
+                    let item_name = host.hover_name(&stack);
+                    self.state().toast.push(
                         s,
                         format!("[Inventory Profiles] Auto-refilled {item_name}"),
                         engine::COLOR_INFO,
@@ -272,7 +303,7 @@ impl InventoryProfiles {
             let max = max_damage(&*host, stack);
             if engine::should_protect_tool(stack.damage(), max, s.tool_protection) {
                 let remaining = max.saturating_sub(stack.damage());
-                let item_name = name(&*host, &mut self.state(), stack.item());
+                let item_name = host.hover_name(stack);
                 // An undamaged spare of the same tool in 9..36 first, else an empty slot there.
                 let spare = (9..36).find(|&i| {
                     slot(&*host, menu, i).is_some_and(|c| {
@@ -377,17 +408,67 @@ impl Hooks for InventoryProfiles {
         }
     }
 
-    /// Notes the open menu screen for the keys.
+    /// Notes the open menu screen for the keys and the buttons, and draws
+    /// the sort buttons.
     fn screen_render_post(&self, host: &dyn ClientHost, event: &mut ScreenRenderPostEvent<'_>) {
         let screen = event.screen;
         let menu = (screen.id == "inventory")
             .then(|| host.local_player()?.container_menu(host))
             .flatten();
-        self.state().open = menu.map(|menu| Open {
-            menu,
-            storage: storage(screen.menu, screen.slots),
-            main: main_slots(screen.menu, screen.slots),
-        });
+        let open = {
+            let mut st = self.state();
+            if st.open.as_ref().map(|o| o.menu) != menu {
+                // The roles stay the same while the menu does.
+                st.open = menu.and_then(|menu| {
+                    let kinds = menu.slot_kinds(host)?;
+                    let (storage, sorts, main) = layout(screen.menu, &kinds);
+                    Some(Open {
+                        menu,
+                        storage,
+                        sorts,
+                        main,
+                    })
+                });
+            }
+            st.open.clone()
+        };
+        let Some(open) = open else {
+            return;
+        };
+        if !host.on(ID) {
+            return;
+        }
+        let s = settings(host);
+        if !s.enabled || !s.sort_buttons {
+            return;
+        }
+        for (at, _) in self.buttons(host, &open) {
+            draw_button(event.draw, at, inside(screen.mouse, at));
+        }
+    }
+
+    /// A left press on a sort button sorts its slots, and goes no further.
+    fn mouse_button_pre(&self, host: &mut dyn ClientHost, event: &mut MouseButtonPreEvent) -> Flow {
+        if !event.pressed || event.button != 0 || !host.on(ID) {
+            return Flow::Continue;
+        }
+        let s = settings(&*host);
+        if !s.enabled || !s.sort_buttons {
+            return Flow::Continue;
+        }
+        let Some(open) = self.open(&*host) else {
+            return Flow::Continue;
+        };
+        let mouse = host.cursor();
+        let Some((_, slots)) = self
+            .buttons(&*host, &open)
+            .into_iter()
+            .find(|(at, _)| inside(mouse, *at))
+        else {
+            return Flow::Continue;
+        };
+        self.sort_slots(host, &s, open.menu, &slots);
+        Flow::Cancel
     }
 
     fn screen_char_typed_pre(
@@ -445,10 +526,11 @@ impl Hooks for InventoryProfiles {
                     })
                 })
             });
-            let target = if hovered.is_some_and(|h| open.storage.contains(&h))
-                || (hovered.is_none() && !open.storage.is_empty())
+            let storage = open.sortable();
+            let target = if hovered.is_some_and(|h| storage.contains(&h))
+                || (hovered.is_none() && !storage.is_empty())
             {
-                open.storage.clone()
+                storage.to_vec()
             } else {
                 open.main.clone()
             };
@@ -514,22 +596,65 @@ impl Hooks for InventoryProfiles {
 mod tests {
     use super::*;
 
+    use MenuSlotKind::{CraftingGrid, Other, Player, Result, Storage};
+
+    /// The 36 player slots every container menu ends with.
+    fn player() -> Vec<MenuSlotKind> {
+        (9..36).chain(0..9).map(Player).collect()
+    }
+
     #[test]
-    fn storage_and_main_slots() {
+    fn layout_reads_the_slot_roles() {
+        // A content mod's crafting station: grid, result, two linked chests' slots.
+        let mut station = vec![CraftingGrid; 9];
+        station.push(Result);
+        station.extend([Storage; 54]);
+        station.extend(player());
+        let (storage, sorts, main) = layout(Some("braid:crafting_station"), &station);
+        assert_eq!(storage, (10..64).collect::<Vec<_>>());
+        assert!(sorts);
+        assert_eq!(main, (64..91).collect::<Vec<_>>());
+        // A furnace's slots are storage for quick-stack but don't sort.
+        let mut furnace = vec![Storage, Storage, Result];
+        furnace.extend(player());
+        let (storage, sorts, main) = layout(Some("minecraft:furnace"), &furnace);
+        assert_eq!(storage, [0, 1]);
+        assert!(!sorts);
+        assert_eq!(main, (3..30).collect::<Vec<_>>());
+        // The inventory: no storage; armour (Player 36..) is not the main inventory.
+        let mut inventory = vec![
+            Result,
+            CraftingGrid,
+            CraftingGrid,
+            CraftingGrid,
+            CraftingGrid,
+        ];
+        inventory.extend((36..40).rev().map(Player));
+        inventory.extend(player());
+        inventory.push(Player(40));
+        let (storage, _, main) = layout(None, &inventory);
+        assert!(storage.is_empty());
+        assert_eq!(main, (9..36).collect::<Vec<_>>());
+        assert!(layout(Some("minecraft:anvil"), &[Other; 39]).0.is_empty());
+    }
+
+    #[test]
+    fn buttons_sit_above_the_top_rows_last_slot() {
+        // A chest's 27 slots at (8 + 18c, 18 + 18r) in a panel at (100, 50).
+        let boxes: Vec<Option<[f32; 4]>> = (0..27)
+            .map(|i| {
+                let (c, r) = ((i % 9) as f32, (i / 9) as f32);
+                Some([108.0 + 18.0 * c, 68.0 + 18.0 * r, 16.0, 16.0])
+            })
+            .collect();
+        let slots: Vec<usize> = (0..27).collect();
+        // Sunrise's own: (160, 5) from the panel.
         assert_eq!(
-            storage(Some("minecraft:generic_9x3"), 63),
-            (0..27).collect::<Vec<_>>()
+            button_at(&boxes, &slots),
+            Some([260.0, 55.0, BUTTON, BUTTON])
         );
-        assert!(storage(Some("minecraft:crafting"), 46).is_empty());
-        assert!(storage(None, 46).is_empty());
-        assert_eq!(main_slots(None, 46), (9..36).collect::<Vec<_>>());
-        assert_eq!(
-            main_slots(Some("minecraft:generic_9x3"), 63),
-            (27..54).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            main_slots(Some("minecraft:crafting"), 46),
-            (10..37).collect::<Vec<_>>()
-        );
+        assert_eq!(button_at(&[None, None], &[0, 1]), None);
+        assert!(inside([260.0, 55.0], [260.0, 55.0, BUTTON, BUTTON]));
+        assert!(!inside([269.0, 55.0], [260.0, 55.0, BUTTON, BUTTON]));
     }
 }
