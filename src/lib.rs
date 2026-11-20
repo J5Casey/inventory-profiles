@@ -232,7 +232,9 @@ impl InventoryProfiles {
             .map(|k| {
                 (
                     creative_order(&creative, k),
-                    host.hover_name(k),
+                    host.hover_name(k)
+                        .and_then(|t| host.text_string(&t))
+                        .unwrap_or_default(),
                     k.item().id(&*host),
                 )
             })
@@ -298,7 +300,10 @@ impl InventoryProfiles {
                     with: SwapWith::Hotbar(sel as u8),
                 };
                 if menu.click(host, &[swap]) {
-                    let item_name = host.hover_name(&stack);
+                    let item_name = host
+                        .hover_name(&stack)
+                        .and_then(|t| host.text_string(&t))
+                        .unwrap_or_default();
                     self.state().toast.push(
                         s,
                         format!("[Inventory Profiles] Auto-refilled {item_name}"),
@@ -316,7 +321,10 @@ impl InventoryProfiles {
             let max = max_damage(&*host, stack);
             if engine::should_protect_tool(stack.damage(), max, s.tool_protection) {
                 let remaining = max.saturating_sub(stack.damage());
-                let item_name = host.hover_name(stack);
+                let item_name = host
+                    .hover_name(stack)
+                    .and_then(|t| host.text_string(&t))
+                    .unwrap_or_default();
                 // An undamaged spare of the same tool in 9..36 first, else an empty slot there.
                 let spare = (9..36).find(|&i| {
                     slot(&*host, menu, i).is_some_and(|c| {
@@ -389,7 +397,7 @@ fn key_name(host: &dyn ClientHost, id: &str, default: &str) -> String {
 
 #[mod_api::sunrise_mod]
 impl Hooks for InventoryProfiles {
-    fn register(&self, r: &mut dyn Registrar, _cx: &RegistrationContext) {
+    fn register(&self, r: &mut dyn Registrar, cx: &RegistrationContext) {
         for (id, key) in [
             (engine::KEY_SORT, engine::KEY_SORT_DEFAULT),
             (engine::KEY_QUICK_STACK, engine::KEY_QUICK_STACK_DEFAULT),
@@ -416,7 +424,7 @@ impl Hooks for InventoryProfiles {
             };
             let key = spec.key.clone();
             if let Err(e) = r.register_setting(spec) {
-                r.registration_refusal(format!("Inventory Profiles setting {key}: {e}"));
+                cx.refuse(&format!("Inventory Profiles setting {key}: {e}"));
             }
         }
     }
