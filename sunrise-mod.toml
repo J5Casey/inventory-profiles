@@ -1,6 +1,6 @@
 id = "inventory_profiles"
 name = "Inventory Profiles"
-version = "1.2.1"
+version = "1.2.2"
 description = "Inventory Profiles Next for Sunrise: R-key sorting (Category, A-Z, Count, ID), Auto-Refill depleted hand stacks, Tool Break Protection, and G-key Quick-Stack to chests."
 authors = ["CayMac"]
 # A native mod on the mod API only (no [native.*] rows, no game internals).
