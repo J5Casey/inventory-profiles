@@ -12,6 +12,7 @@ capabilities = ["registries"]
 game = "26.3"
 # J5Casey/sunrise braid/sun-base, a local developer base frozen for the whole pack:
 # sunrise-org/sunrise main 8d0100ce5c (with #1523, #1535, #1536, #1803, #1811, #1938 merged)
-# + sunrise#1802 (LevelRef loot_odds, the one patch not upstream yet).
-sunrise = "8e673a8e6a968239d7dab2ef455c95a873e1fcb7"
+# + sunrise#1802 (LevelRef loot_odds), sunrise#4798 (Holder::Server) and sunrise#4843 (a player's
+# drops reach living_drops without a killing blow), the three patches not upstream yet.
+sunrise = "38d7989fbee05b36391606ff5908701c85535749"
 mixins = "e59da9094f0c2fdda6c627fe9eff22dec6a906f0"
