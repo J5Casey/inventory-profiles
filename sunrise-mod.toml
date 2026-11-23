@@ -14,5 +14,6 @@ game = "26.3"
 # sunrise-org/sunrise main 8d0100ce5c (with #1523, #1535, #1536, #1803, #1811, #1938 merged)
 # + sunrise#1802 (LevelRef loot_odds), sunrise#4798 (Holder::Server) and sunrise#4843 (a player's
 # drops reach living_drops without a killing blow), the three patches not upstream yet.
-sunrise = "38d7989fbee05b36391606ff5908701c85535749"
+# + sunrise 77869de80a (#4648, merged upstream): autosaves keep the owner's attachments.
+sunrise = "e3319de1554272baf78bdda88eb4937b07a2cbce"
 mixins = "e59da9094f0c2fdda6c627fe9eff22dec6a906f0"
