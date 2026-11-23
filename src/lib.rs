@@ -80,6 +80,12 @@ fn settings(host: &dyn ClientHost) -> Settings {
 /// than `MACHINE_SLOTS` storage slots is taken for a machine. A hopper, the
 /// smallest storage of the game's own, has 5.
 ///
+/// A content mod's menu with output-only (`Result`) slots and no crafting
+/// grid is a machine whatever its slot count (Machina's Void Trawler: a weight
+/// slot and four filters, which the game calls storage, and 18 outputs): it
+/// has no storage at all, so no button, no sort and no quick-stack into it.
+/// A crafting station has a grid and a result and keeps its linked chests.
+///
 /// A content mod's own GUI drawn on a chest menu (`ServerHost::open_menu`, a
 /// picker or a shop) has storage slots that only show things, so it has no
 /// storage at all: no button, no sort, no quick-stack. The game's chest menus
@@ -91,7 +97,11 @@ fn layout(
     title: Option<&Text>,
     kinds: &[MenuSlotKind],
 ) -> (Vec<usize>, bool, Vec<usize>) {
-    let gui = own_gui(menu, title);
+    let content = menu.is_some_and(|m| !m.starts_with("minecraft:") && !m.starts_with("sunrise:"));
+    let outputs = content
+        && kinds.contains(&MenuSlotKind::Result)
+        && !kinds.contains(&MenuSlotKind::CraftingGrid);
+    let gui = own_gui(menu, title) || outputs;
     let storage: Vec<usize> = (0..kinds.len())
         .filter(|&i| !gui && kinds[i] == MenuSlotKind::Storage)
         .collect();
@@ -107,9 +117,7 @@ fn layout(
                 | "minecraft:brewing_stand"
         )
     );
-    let content_machine = menu.is_some_and(|m| {
-        !m.starts_with("minecraft:") && !m.starts_with("sunrise:") && storage.len() < MACHINE_SLOTS
-    });
+    let content_machine = content && (outputs || storage.len() < MACHINE_SLOTS);
     (storage, !(machine || content_machine), main)
 }
 
@@ -680,9 +688,14 @@ mod tests {
         let (storage, _, main) = layout(None, None, &inventory);
         assert!(storage.is_empty());
         assert_eq!(main, (9..36).collect::<Vec<_>>());
-        assert!(layout(Some("minecraft:anvil"), None, &[Other; 39]).0.is_empty());
-        // A content mod's machine: Machina's Ember Engine (fuel, coolant) and
-        // Essence Press (two inputs, a result) quick-stack but don't sort.
+        assert!(
+            layout(Some("minecraft:anvil"), None, &[Other; 39])
+                .0
+                .is_empty()
+        );
+        // A content mod's machine: Machina's Ember Engine (fuel, coolant) takes
+        // quick-stacks but doesn't sort; its Essence Press (two inputs, a
+        // result) has output-only slots, so it takes neither.
         let mut engine = vec![Storage, Storage];
         engine.extend(player());
         let (storage, sorts, _) = layout(Some("machina:ember_engine"), None, &engine);
@@ -691,14 +704,35 @@ mod tests {
         let mut press = vec![Storage, Storage, Result];
         press.extend(player());
         assert!(!layout(Some("machina:essence_press"), None, &press).1);
+        // Output-only slots make a machine, however many slots it has: the Void
+        // Trawler's weight, four filters and 18 outputs. No storage, no sort.
+        let mut trawler = vec![Storage; 5];
+        trawler.extend([Result; 18]);
+        trawler.extend(player());
+        let (storage, sorts, main) = layout(Some("machina:void_trawler"), None, &trawler);
+        assert!(storage.is_empty());
+        assert!(!sorts);
+        assert_eq!(main, (23..50).collect::<Vec<_>>());
         // A content mod's own screen on a chest menu: no storage.
         let mut gui = vec![Storage; 36];
         gui.extend(player());
         let own = Text::translate("container.chisel.chisel", Vec::new());
         let chest = Text::translate("container.chest", Vec::new());
-        assert!(layout(Some("minecraft:generic_9x4"), Some(&own), &gui).0.is_empty());
-        assert_eq!(layout(Some("minecraft:generic_9x4"), Some(&chest), &gui).0.len(), 36);
-        assert_eq!(layout(Some("minecraft:generic_9x4"), None, &gui).0.len(), 36);
+        assert!(
+            layout(Some("minecraft:generic_9x4"), Some(&own), &gui)
+                .0
+                .is_empty()
+        );
+        assert_eq!(
+            layout(Some("minecraft:generic_9x4"), Some(&chest), &gui)
+                .0
+                .len(),
+            36
+        );
+        assert_eq!(
+            layout(Some("minecraft:generic_9x4"), None, &gui).0.len(),
+            36
+        );
         // A hopper's 5 and a llama's 3-slot chest still sort.
         let mut hopper = vec![Storage; 5];
         hopper.extend(player());
