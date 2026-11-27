@@ -27,6 +27,10 @@ struct Open {
     /// The container's storage (a chest's, a hopper's, a crafting station's
     /// linked chests): quick-stack's target.
     storage: Vec<usize>,
+    /// What quick-stack moves into: the storage, and a content mod machine's
+    /// input slots (`MenuSlotKind::Input`), which the machine takes items into
+    /// by kind.
+    quick: Vec<usize>,
     /// Whether that storage sorts: not a furnace's, a brewing stand's or a
     /// content mod machine's slots, which take their items by kind.
     sorts: bool,
@@ -86,6 +90,11 @@ fn settings(host: &dyn ClientHost) -> Settings {
 /// has no storage at all, so no button, no sort and no quick-stack into it.
 /// A crafting station has a grid and a result and keeps its linked chests.
 ///
+/// A content mod's input slots (`Input`: the Essence Press's two, the Ember
+/// Engine's fuel, the Void Trawler's weight) are where quick-stack goes in a
+/// machine, though they never sort. The machine's own rules (`menu_slot_rules`)
+/// decide what a quick move puts in them. Returned last: those slots.
+///
 /// A content mod's own GUI drawn on a chest menu (`ServerHost::open_menu`, a
 /// picker or a shop) has storage slots that only show things, so it has no
 /// storage at all: no button, no sort, no quick-stack. The game's chest menus
@@ -96,7 +105,7 @@ fn layout(
     menu: Option<&str>,
     title: Option<&Text>,
     kinds: &[MenuSlotKind],
-) -> (Vec<usize>, bool, Vec<usize>) {
+) -> (Vec<usize>, bool, Vec<usize>, Vec<usize>) {
     let content = menu.is_some_and(|m| !m.starts_with("minecraft:") && !m.starts_with("sunrise:"));
     let outputs = content
         && kinds.contains(&MenuSlotKind::Result)
@@ -108,6 +117,10 @@ fn layout(
     let main = (0..kinds.len())
         .filter(|&i| matches!(kinds[i], MenuSlotKind::Player(n) if (9..36).contains(&n)))
         .collect();
+    let mut quick = storage.clone();
+    if content {
+        quick.extend((0..kinds.len()).filter(|&i| kinds[i] == MenuSlotKind::Input));
+    }
     let machine = matches!(
         menu,
         Some(
@@ -118,7 +131,7 @@ fn layout(
         )
     );
     let content_machine = content && (outputs || storage.len() < MACHINE_SLOTS);
-    (storage, !(machine || content_machine), main)
+    (storage, !(machine || content_machine), main, quick)
 }
 
 /// Whether a chest menu is a content mod's own screen: its title is a
@@ -190,6 +203,14 @@ fn max_of(host: &dyn ClientHost, stack: &ItemStack) -> u32 {
         .or_else(|| host.max_stack_size(stack.item()))
         .unwrap_or(64)
         .max(1)
+}
+
+/// Whether `b` is the same tool as `a`: the same item with the same custom data,
+/// so a spare swapped in for a fishing rod is a rod of the same depth (a mod
+/// makes its tiers one item with different data), not just any rod.
+fn same_tool(a: &ItemStack, b: &ItemStack) -> bool {
+    a.item() == b.item()
+        && component(a, "minecraft:custom_data") == component(b, "minecraft:custom_data")
 }
 
 fn max_damage(host: &dyn ClientHost, stack: &ItemStack) -> u32 {
@@ -360,7 +381,7 @@ impl InventoryProfiles {
                 // An undamaged spare of the same tool in 9..36 first, else an empty slot there.
                 let spare = (9..36).find(|&i| {
                     slot(&*host, menu, i).is_some_and(|c| {
-                        c.item() == stack.item()
+                        same_tool(&c, stack)
                             && !engine::should_protect_tool(c.damage(), max, s.tool_protection)
                     })
                 });
@@ -403,6 +424,16 @@ impl InventoryProfiles {
                             engine::COLOR_WARN,
                         );
                     }
+                } else {
+                    // Nowhere to put it: the tool stays in hand, so say why it
+                    // is about to give out.
+                    self.state().toast.push(
+                        s,
+                        format!(
+                            "[Inventory Profiles] {item_name} is about to break ({remaining} left)!"
+                        ),
+                        engine::COLOR_WARN,
+                    );
                 }
             }
         }
@@ -474,10 +505,11 @@ impl Hooks for InventoryProfiles {
                 // The roles stay the same while the menu does.
                 st.open = menu.and_then(|menu| {
                     let kinds = menu.slot_kinds(host)?;
-                    let (storage, sorts, main) = layout(screen.menu, screen.title, &kinds);
+                    let (storage, sorts, main, quick) = layout(screen.menu, screen.title, &kinds);
                     Some(Open {
                         menu,
                         storage,
+                        quick,
                         sorts,
                         main,
                     })
@@ -594,11 +626,11 @@ impl Hooks for InventoryProfiles {
         // Quick-stack: inventory stacks of items the container already holds go into it.
         if s.quick_stack && event.key == quick_key {
             let menu = open.menu;
-            if open.storage.is_empty() || menu.carried(&*host).flatten().is_some() {
+            if open.quick.is_empty() || menu.carried(&*host).flatten().is_some() {
                 return;
             }
             let existing: HashSet<ItemKey> = open
-                .storage
+                .quick
                 .iter()
                 .filter_map(|&i| slot(&*host, menu, i))
                 .map(|st| st.item())
@@ -649,7 +681,7 @@ impl Hooks for InventoryProfiles {
 mod tests {
     use super::*;
 
-    use MenuSlotKind::{CraftingGrid, Other, Player, Result, Storage};
+    use MenuSlotKind::{CraftingGrid, Input, Other, Player, Result, Storage};
 
     /// The 36 player slots every container menu ends with.
     fn player() -> Vec<MenuSlotKind> {
@@ -663,14 +695,14 @@ mod tests {
         station.push(Result);
         station.extend([Storage; 54]);
         station.extend(player());
-        let (storage, sorts, main) = layout(Some("braid:crafting_station"), None, &station);
+        let (storage, sorts, main, _) = layout(Some("braid:crafting_station"), None, &station);
         assert_eq!(storage, (10..64).collect::<Vec<_>>());
         assert!(sorts);
         assert_eq!(main, (64..91).collect::<Vec<_>>());
         // A furnace's slots are storage for quick-stack but don't sort.
         let mut furnace = vec![Storage, Storage, Result];
         furnace.extend(player());
-        let (storage, sorts, main) = layout(Some("minecraft:furnace"), None, &furnace);
+        let (storage, sorts, main, _) = layout(Some("minecraft:furnace"), None, &furnace);
         assert_eq!(storage, [0, 1]);
         assert!(!sorts);
         assert_eq!(main, (3..30).collect::<Vec<_>>());
@@ -685,7 +717,7 @@ mod tests {
         inventory.extend((36..40).rev().map(Player));
         inventory.extend(player());
         inventory.push(Player(40));
-        let (storage, _, main) = layout(None, None, &inventory);
+        let (storage, _, main, _) = layout(None, None, &inventory);
         assert!(storage.is_empty());
         assert_eq!(main, (9..36).collect::<Vec<_>>());
         assert!(
@@ -693,26 +725,42 @@ mod tests {
                 .0
                 .is_empty()
         );
-        // A content mod's machine: Machina's Ember Engine (fuel, coolant) takes
-        // quick-stacks but doesn't sort; its Essence Press (two inputs, a
-        // result) has output-only slots, so it takes neither.
-        let mut engine = vec![Storage, Storage];
+        // A content mod's machine: Machina's Ember Engine (fuel, coolant: input
+        // slots) takes quick-stacks but doesn't sort or count as storage; its
+        // Essence Press (two inputs, a result) the same.
+        let mut engine = vec![Input, Input];
         engine.extend(player());
-        let (storage, sorts, _) = layout(Some("machina:ember_engine"), None, &engine);
-        assert_eq!(storage, [0, 1]);
+        let (storage, sorts, _, quick) = layout(Some("machina:ember_engine"), None, &engine);
+        assert!(storage.is_empty());
+        assert_eq!(quick, [0, 1]);
         assert!(!sorts);
-        let mut press = vec![Storage, Storage, Result];
+        let mut press = vec![Input, Input, Result];
         press.extend(player());
-        assert!(!layout(Some("machina:essence_press"), None, &press).1);
+        let (storage, sorts, main, quick) = layout(Some("machina:essence_press"), None, &press);
+        assert!(storage.is_empty());
+        assert_eq!(quick, [0, 1]);
+        assert!(!sorts);
+        assert_eq!(main, (3..30).collect::<Vec<_>>());
         // Output-only slots make a machine, however many slots it has: the Void
-        // Trawler's weight, four filters and 18 outputs. No storage, no sort.
-        let mut trawler = vec![Storage; 5];
+        // Trawler's weight (an input), four filters and 18 outputs. No storage, no
+        // sort, and quick-stack only into the weight, never the filters.
+        let mut trawler = vec![Input];
+        trawler.extend([Storage; 4]);
         trawler.extend([Result; 18]);
         trawler.extend(player());
-        let (storage, sorts, main) = layout(Some("machina:void_trawler"), None, &trawler);
+        let (storage, sorts, main, quick) = layout(Some("machina:void_trawler"), None, &trawler);
         assert!(storage.is_empty());
+        assert_eq!(quick, [0]);
         assert!(!sorts);
         assert_eq!(main, (23..50).collect::<Vec<_>>());
+        // A furnace's input slots are not a content mod's: no quick-stack there.
+        let mut furnace = vec![Input, Input, Result];
+        furnace.extend(player());
+        assert!(
+            layout(Some("minecraft:furnace"), None, &furnace)
+                .3
+                .is_empty()
+        );
         // A content mod's own screen on a chest menu: no storage.
         let mut gui = vec![Storage; 36];
         gui.extend(player());
