@@ -18,7 +18,7 @@ pub const COLOR_WARN: u32 = 0xFFFF_AA00;
 pub const COLOR_ALERT: u32 = 0xFFFF_5555;
 
 /// How long a notice stays, in seconds.
-pub const TOAST_SECONDS: f32 = 2.4;
+pub const TOAST_SECONDS: f32 = 3.5;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Settings {
