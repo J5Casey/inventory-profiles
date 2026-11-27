@@ -15,5 +15,7 @@ game = "26.3"
 # + sunrise#1802 (LevelRef loot_odds), sunrise#4798 (Holder::Server) and sunrise#4843 (a player's
 # drops reach living_drops without a killing blow), the three patches not upstream yet.
 # + sunrise 77869de80a (#4648, merged upstream): autosaves keep the owner's attachments.
-sunrise = "e3319de1554272baf78bdda88eb4937b07a2cbce"
+# + sunrise#6449 (LevelRef::roll_entity_loot: a mob's death loot with no mob), braid/sun-base6.
+# Developer base developer-0258744369db936b6e189495eb8dbf571fc387b79e42fd5109aba0727762f403.
+sunrise = "8ef6d00509c7254e3120af9fddf2907a104f6eb7"
 mixins = "e59da9094f0c2fdda6c627fe9eff22dec6a906f0"
